@@ -3,4 +3,4 @@
 	url = https://github.com/madler/zlib
 [submodule "leveldb-mcpe"]
 	path = leveldb-mcpe
-	url = https://github.com/Amulet-Team/leveldb-mcpe
+	url = https://github.com/masroore/leveldb-mcpe
