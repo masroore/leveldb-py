@@ -5,7 +5,7 @@ from setuptools import setup, Extension
 from Cython.Build import cythonize
 
 sys.path.append(os.path.dirname(__file__))
-import versioneer
+# import versioneer
 
 sys.path.remove(os.path.dirname(__file__))
 
@@ -58,8 +58,8 @@ else:
 
 
 setup(
-    version=versioneer.get_version(),
-    cmdclass=versioneer.get_cmdclass(),
+    # version=versioneer.get_version(),
+    # cmdclass=versioneer.get_cmdclass(),
     ext_modules=cythonize(
         Extension(
             name="leveldb._leveldb",

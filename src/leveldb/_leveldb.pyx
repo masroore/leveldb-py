@@ -26,6 +26,8 @@ from leveldb_mcpe cimport (
     RepairDB,
 )
 
+_KB = 1024
+_MB = _KB * _KB
 
 cdef extern from "<shared_mutex>" namespace "std" nogil:
     cdef cppclass shared_mutex:
@@ -36,7 +38,6 @@ cdef extern from "<shared_mutex>" namespace "std" nogil:
 cdef extern from "<mutex>" namespace "std" nogil:
     cdef cppclass unique_lock[T]:
         unique_lock(shared_mutex)
-
 
 class LevelDBException(Exception):
     """
@@ -54,7 +55,6 @@ class LevelDBIteratorException(LevelDBException):
     The exception thrown for issues related to the iterator.
     """
 
-
 cdef extern from *:
     """
     class NullLogger : public leveldb::Logger {
@@ -70,7 +70,6 @@ cdef inline bint _check_iterator(CIterator *iterator) nogil except -1:
     if iterator is NULL:
         with gil:
             raise LevelDBIteratorException("The iterator has been deleted.")
-
 
 cdef class Iterator:
     cdef CIterator *iterator
@@ -155,12 +154,10 @@ cdef class Iterator:
             raise LevelDBIteratorException("Iterator is not valid")
         return self.iterator.value().ToString()
 
-
 cdef inline bint _check_db(DB *db) nogil except -1:
     if db is NULL:
         with gil:
             raise LevelDBException("The database has been closed.")
-
 
 cdef class LevelDB:
     cdef DB *db
@@ -170,7 +167,12 @@ cdef class LevelDB:
     cdef object iterators
     cdef object __weakref__
 
-    def __init__(self, str path, bool create_if_missing = False):
+    def __init__(self, str path, bool create_if_missing=False,
+                 bool error_if_exists=False, paranoid_checks=None,
+                 write_buffer_size=None, max_open_files=None,
+                 lru_cache_size=None, block_size=None,
+                 block_restart_interval=None, max_file_size=None,
+                 int bloom_filter_bits=0):
         """
         Construct a new :class:`LevelDB` instance from the database at the given path.
 
@@ -190,13 +192,39 @@ cdef class LevelDB:
 
         cdef Options* options = new Options()
         options.create_if_missing = create_if_missing
-        options.filter_policy = NewBloomFilterPolicy(10)
-        options.block_cache = NewLRUCache(40 * 1024 * 1024)
-        options.write_buffer_size = 4 * 1024 * 1024
+        options.error_if_exists = error_if_exists
         options.info_log = new NullLogger()
         options.compressors[0] = new ZlibCompressorRaw(-1)
         options.compressors[1] = new ZlibCompressor(-1)
-        options.block_size = 163840
+
+        if paranoid_checks is not None:
+            options.paranoid_checks = paranoid_checks
+
+        if max_open_files is not None:
+            options.max_open_files = max_open_files
+
+        if write_buffer_size is None:
+            write_buffer_size = 4 * _MB
+
+        if lru_cache_size is None:
+            lru_cache_size = 40 * _MB
+
+        if block_size is None:
+            block_size =  160 * _KB
+
+        options.write_buffer_size = write_buffer_size
+        options.block_cache = NewLRUCache(lru_cache_size)
+        options.block_size = block_size
+
+        if block_restart_interval is not None:
+            options.block_restart_interval = block_restart_interval
+
+        if max_file_size is not None:
+            options.max_file_size = max_file_size
+
+        if bloom_filter_bits > 0:
+            options.filter_policy = NewBloomFilterPolicy(bloom_filter_bits)
+
         cdef const Options* const_options = options
 
         self.read_options.decompress_allocator = new DecompressAllocator()
@@ -327,7 +355,7 @@ cdef class LevelDB:
         return iterator
 
     def iterate(
-        self, bytes start = None, bytes end = None
+            self, bytes start = None, bytes end = None
     ):  # -> IteratorT[Tuple[bytes, bytes]]:
         """
         Iterate through all keys and data that exist between the given keys.
